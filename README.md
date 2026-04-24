@@ -109,7 +109,7 @@ finops-intelligence-hub/
 │   │
 │   ├── detection/
 │   │   ├── anomaly_engine.py      # Isolation Forest + Z-Score detection
-│   │   ├── feature_engineering.py # Lag features, rolling averages
+│   │   ├── engineering.py # Lag features, rolling averages
 │   │   └── scorer.py              # Anomaly scoring, threshold logic
 │   │
 │   ├── forecasting/
