@@ -19,14 +19,11 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import duckdb
 import pandas as pd
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
-
-from schema import BillingEvent
 
 logging.basicConfig(
     level=logging.INFO,

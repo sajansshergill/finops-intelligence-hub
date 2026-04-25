@@ -5,9 +5,8 @@ Billing event schema for the FinOps Intelligence Hub.
 Mirrors the structure of a GCP Billing Export to BigQuery.
 """
 
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Literal
 import json
 import uuid
 
