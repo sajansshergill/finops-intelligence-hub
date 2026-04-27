@@ -55,6 +55,7 @@ rng = np.random.default_rng(seed=42)
 # Cost generation helpers
 # ---------------------------------------------------------------------------
 
+
 def base_cost(sku: str, date: datetime) -> float:
     """
     Generate a realistic base cost for a SKU on a given date.
@@ -110,6 +111,7 @@ def inject_anomaly(cost: float, sku: str) -> tuple[float, float]:
 # Event generation
 # ---------------------------------------------------------------------------
 
+
 def generate_events(
     months: int = 18,
     anomaly_rate: float = 0.03,
@@ -129,9 +131,7 @@ def generate_events(
     start_date = end_date - timedelta(days=days_span)
 
     # Build a stable project → department mapping
-    project_dept = {
-        proj: random.choice(DEPARTMENTS) for proj in PROJECTS
-    }
+    project_dept = {proj: random.choice(DEPARTMENTS) for proj in PROJECTS}
 
     current = start_date
     total_events = 0
@@ -238,6 +238,7 @@ def generate_live_events(
 # Kafka publishing
 # ---------------------------------------------------------------------------
 
+
 def build_producer(retries: int = 5) -> KafkaProducer:
     """Build a KafkaProducer with retry logic."""
     for attempt in range(1, retries + 1):
@@ -275,7 +276,7 @@ def publish(
     """Publish a single BillingEvent to Kafka."""
     producer.send(
         topic=topic,
-        key=event.project_id,       # partition by project for ordering
+        key=event.project_id,  # partition by project for ordering
         value=event.to_dict(),
     )
 
@@ -283,6 +284,7 @@ def publish(
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FinOps Billing Event Producer")

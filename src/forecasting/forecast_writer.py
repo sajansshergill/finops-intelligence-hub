@@ -48,27 +48,28 @@ def write_forecasts(
     for r in results:
         df = r["forecast_df"].copy()
         df["model_run_id"] = r["run_id"]
-        df["mape"]         = r["metrics"]["mape"]
-        df["rmse"]         = r["metrics"]["rmse"]
-        df["created_at"]   = datetime.now(UTC)
+        df["mape"] = r["metrics"]["mape"]
+        df["rmse"] = r["metrics"]["rmse"]
+        df["created_at"] = datetime.now(UTC)
         all_forecasts.append(df)
 
     combined = pd.concat(all_forecasts, ignore_index=True)
 
     # Ensure correct dtypes
-    combined["forecast_date"]  = pd.to_datetime(combined["forecast_date"]).dt.date
+    combined["forecast_date"] = pd.to_datetime(combined["forecast_date"]).dt.date
     combined["predicted_cost"] = combined["predicted_cost"].round(4)
-    combined["lower_80"]       = combined["lower_80"].round(4)
-    combined["upper_80"]       = combined["upper_80"].round(4)
-    combined["lower_95"]       = combined["lower_95"].round(4)
-    combined["upper_95"]       = combined["upper_95"].round(4)
+    combined["lower_80"] = combined["lower_80"].round(4)
+    combined["upper_80"] = combined["upper_80"].round(4)
+    combined["lower_95"] = combined["lower_95"].round(4)
+    combined["upper_95"] = combined["upper_95"].round(4)
     for col in ("project_id", "service_sku", "model_run_id"):
         combined[col] = combined[col].astype("string").astype(object)
 
     # Register and insert
     conn.register("forecasts_temp", combined)
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT OR IGNORE INTO forecasts (
             project_id,
             service_sku,
@@ -93,18 +94,21 @@ def write_forecasts(
             model_run_id,
             created_at
         FROM forecasts_temp
-    """)
+    """
+    )
 
     total = conn.execute("SELECT COUNT(*) FROM forecasts").fetchone()[0]
     written = len(combined)
 
     logger.info(
-        f"Wrote {written:,} forecast rows to DuckDB "
-        f"(total in table: {total:,})"
+        f"Wrote {written:,} forecast rows to DuckDB " f"(total in table: {total:,})"
     )
 
     # Also save to Parquet for audit trail
-    out_path = Path("data/forecasts") / f"forecast_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.parquet"
+    out_path = (
+        Path("data/forecasts")
+        / f"forecast_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.parquet"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(out_path, index=False)
     logger.info(f"Forecast snapshot saved to {out_path}")
@@ -129,7 +133,8 @@ def load_latest_forecasts(
 
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
 
-    df = conn.execute(f"""
+    df = conn.execute(
+        f"""
         WITH ranked AS (
             SELECT *,
                 ROW_NUMBER() OVER (
@@ -153,7 +158,8 @@ def load_latest_forecasts(
         FROM ranked
         WHERE rn = 1
         ORDER BY project_id, service_sku, forecast_date
-    """).fetchdf()
+    """
+    ).fetchdf()
 
     logger.info(
         f"Loaded {len(df):,} forecast rows | "
@@ -169,7 +175,8 @@ def forecast_summary(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     Aggregated 30-day forecast summary per project.
     Used for dashboard KPI cards.
     """
-    return conn.execute("""
+    return conn.execute(
+        """
         WITH latest AS (
             SELECT *,
                 ROW_NUMBER() OVER (
@@ -191,11 +198,13 @@ def forecast_summary(conn: duckdb.DuckDBPyConnection) -> pd.DataFrame:
         WHERE rn = 1
         GROUP BY project_id
         ORDER BY total_forecast_30d DESC
-    """).fetchdf()
+    """
+    ).fetchdf()
 
 
 if __name__ == "__main__":
     import logging
+
     logging.basicConfig(level=logging.INFO)
 
     conn = duckdb.connect(str(DB_PATH))

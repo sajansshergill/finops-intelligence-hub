@@ -40,7 +40,7 @@ KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_GROUP_ID = os.environ.get("KAFKA_GROUP_ID", "finops-consumer-group")
 
 DATA_DIR = Path(os.environ.get("FINOPS_DATA_DIR", "data"))
-RAW_DIR = DATA_DIR / "raw"          # Parquet landing zone (GCS equivalent)
+RAW_DIR = DATA_DIR / "raw"  # Parquet landing zone (GCS equivalent)
 PROCESSED_DIR = DATA_DIR / "processed"
 DB_PATH = DATA_DIR / "finops.duckdb"
 
@@ -120,6 +120,7 @@ def init_db(conn: duckdb.DuckDBPyConnection, *, log: bool = True) -> None:
 # Parquet writer
 # ---------------------------------------------------------------------------
 
+
 def write_parquet(batch: list[dict], partition_dt: datetime) -> Path:
     """
     Write a batch of events to a date-partitioned Parquet file.
@@ -144,6 +145,7 @@ def write_parquet(batch: list[dict], partition_dt: datetime) -> Path:
 # DuckDB loader
 # ---------------------------------------------------------------------------
 
+
 def load_to_duckdb(
     conn: duckdb.DuckDBPyConnection,
     parquet_path: Path,
@@ -155,7 +157,8 @@ def load_to_duckdb(
     """
     before = conn.execute("SELECT COUNT(*) FROM billing_events").fetchone()[0]
 
-    conn.execute(f"""
+    conn.execute(
+        f"""
         INSERT OR IGNORE INTO billing_events
         SELECT
             event_id,
@@ -172,7 +175,8 @@ def load_to_duckdb(
             is_anomaly,
             now() AS ingested_at
         FROM read_parquet('{parquet_path}')
-    """)
+    """
+    )
 
     after = conn.execute("SELECT COUNT(*) FROM billing_events").fetchone()[0]
     inserted = after - before
@@ -183,6 +187,7 @@ def load_to_duckdb(
 # ---------------------------------------------------------------------------
 # Consumer
 # ---------------------------------------------------------------------------
+
 
 class BillingConsumer:
     def __init__(
@@ -263,8 +268,13 @@ class BillingConsumer:
                 if self._should_flush():
                     self._flush()
 
-                if self.max_messages is not None and self.total_consumed >= self.max_messages:
-                    logger.info(f"Stopping after {self.max_messages:,} messages (--max-messages)")
+                if (
+                    self.max_messages is not None
+                    and self.total_consumed >= self.max_messages
+                ):
+                    logger.info(
+                        f"Stopping after {self.max_messages:,} messages (--max-messages)"
+                    )
                     break
 
         except Exception as e:
@@ -309,6 +319,7 @@ class BillingConsumer:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FinOps Billing Event Consumer")

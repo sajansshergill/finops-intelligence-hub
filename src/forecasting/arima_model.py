@@ -55,11 +55,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("finops.forecasting")
 
-DB_PATH      = Path("data/finops.duckdb")
-MLFLOW_URI   = "models/mlruns"
-EXPERIMENT   = "finops-spend-forecast"
-HORIZON      = 30      # forecast days ahead
-MIN_HISTORY  = 60      # minimum days of history required per series
+DB_PATH = Path("data/finops.duckdb")
+MLFLOW_URI = "models/mlruns"
+EXPERIMENT = "finops-spend-forecast"
+HORIZON = 30  # forecast days ahead
+MIN_HISTORY = 60  # minimum days of history required per series
 
 
 class SimpleForecastResult:
@@ -72,10 +72,12 @@ class SimpleForecastResult:
     def conf_int(self, alpha: float) -> pd.DataFrame:
         z_score = 1.2816 if alpha == 0.20 else 1.96
         delta = z_score * self.residual_std
-        return pd.DataFrame({
-            "lower": self.predicted_mean - delta,
-            "upper": self.predicted_mean + delta,
-        })
+        return pd.DataFrame(
+            {
+                "lower": self.predicted_mean - delta,
+                "upper": self.predicted_mean + delta,
+            }
+        )
 
 
 class SimpleForecastModel:
@@ -104,6 +106,7 @@ class SimpleForecastModel:
 # Data loading
 # ---------------------------------------------------------------------------
 
+
 def load_series(
     conn: duckdb.DuckDBPyConnection,
     project_id: str | None = None,
@@ -117,7 +120,8 @@ def load_series(
     if project_id:
         where = f"WHERE project_id = '{project_id}'"
 
-    df = conn.execute(f"""
+    df = conn.execute(
+        f"""
         SELECT
             project_id,
             service_sku,
@@ -127,7 +131,8 @@ def load_series(
         {where}
         GROUP BY 1, 2, 3
         ORDER BY 1, 2, 3
-    """).fetchdf()
+    """
+    ).fetchdf()
 
     # Optionally limit to highest-spend SKUs
     if top_skus:
@@ -157,6 +162,7 @@ def load_series(
 # Stationarity check
 # ---------------------------------------------------------------------------
 
+
 def is_stationary(series: pd.Series, significance: float = 0.05) -> bool:
     """Augmented Dickey-Fuller test for stationarity."""
     if adfuller is None:
@@ -172,6 +178,7 @@ def is_stationary(series: pd.Series, significance: float = 0.05) -> bool:
 # ---------------------------------------------------------------------------
 # ARIMA fitting
 # ---------------------------------------------------------------------------
+
 
 def fit_arima(
     series: pd.Series,
@@ -225,10 +232,12 @@ def select_arima_order(series_log: pd.Series) -> tuple[tuple[int, int, int], flo
     if auto_arima is not None:
         auto = auto_arima(
             series_log,
-            start_p=0, max_p=3,
-            start_q=0, max_q=3,
-            d=None,                  # auto-detect differencing
-            seasonal=False,          # daily data, no strong weekly seasonality in log space
+            start_p=0,
+            max_p=3,
+            start_q=0,
+            max_q=3,
+            d=None,  # auto-detect differencing
+            seasonal=False,  # daily data, no strong weekly seasonality in log space
             information_criterion="aic",
             stepwise=True,
             suppress_warnings=True,
@@ -265,6 +274,7 @@ def select_arima_order(series_log: pd.Series) -> tuple[tuple[int, int, int], flo
 # Forecast generation
 # ---------------------------------------------------------------------------
 
+
 def generate_forecast(
     fitted_model,
     series_log: pd.Series,
@@ -277,9 +287,9 @@ def generate_forecast(
         lower_80, upper_80, lower_95, upper_95
     """
     forecast_result = fitted_model.get_forecast(steps=horizon)
-    forecast_mean   = forecast_result.predicted_mean
-    conf_80         = forecast_result.conf_int(alpha=0.20)
-    conf_95         = forecast_result.conf_int(alpha=0.05)
+    forecast_mean = forecast_result.predicted_mean
+    conf_80 = forecast_result.conf_int(alpha=0.20)
+    conf_95 = forecast_result.conf_int(alpha=0.05)
 
     last_date = series_log.index[-1]
     forecast_dates = pd.date_range(
@@ -289,14 +299,16 @@ def generate_forecast(
     )
 
     # Inverse log transform
-    df = pd.DataFrame({
-        "forecast_date":  forecast_dates,
-        "predicted_cost": np.expm1(forecast_mean.values),
-        "lower_80":       np.expm1(conf_80.iloc[:, 0].values),
-        "upper_80":       np.expm1(conf_80.iloc[:, 1].values),
-        "lower_95":       np.expm1(conf_95.iloc[:, 0].values),
-        "upper_95":       np.expm1(conf_95.iloc[:, 1].values),
-    })
+    df = pd.DataFrame(
+        {
+            "forecast_date": forecast_dates,
+            "predicted_cost": np.expm1(forecast_mean.values),
+            "lower_80": np.expm1(conf_80.iloc[:, 0].values),
+            "upper_80": np.expm1(conf_80.iloc[:, 1].values),
+            "lower_95": np.expm1(conf_95.iloc[:, 0].values),
+            "upper_95": np.expm1(conf_95.iloc[:, 1].values),
+        }
+    )
 
     # Clip negative lower bounds (cost can't be negative)
     df["lower_80"] = df["lower_80"].clip(lower=0)
@@ -309,6 +321,7 @@ def generate_forecast(
 # Evaluation metrics (in-sample)
 # ---------------------------------------------------------------------------
 
+
 def compute_metrics(
     fitted_model,
     series_log: pd.Series,
@@ -320,8 +333,8 @@ def compute_metrics(
     """
     holdout_n = min(30, len(series_orig) // 5)
 
-    train_log  = series_log.iloc[:-holdout_n]
-    actual     = series_orig.iloc[-holdout_n:]
+    train_log = series_log.iloc[:-holdout_n]
+    actual = series_orig.iloc[-holdout_n:]
 
     if ARIMA is None or isinstance(fitted_model, SimpleForecastModel):
         preds_log = SimpleForecastModel.forecast_from(
@@ -334,25 +347,26 @@ def compute_metrics(
         model = ARIMA(train_log, order=fitted_model.model.order)
         fitted_train = model.fit()
         preds_log = fitted_train.forecast(steps=holdout_n)
-    preds     = np.expm1(preds_log)
+    preds = np.expm1(preds_log)
 
     # MAPE
-    mask  = actual > 0
-    mape  = np.mean(np.abs((actual[mask] - preds[mask]) / actual[mask])) * 100
+    mask = actual > 0
+    mape = np.mean(np.abs((actual[mask] - preds[mask]) / actual[mask])) * 100
 
     # RMSE
-    rmse  = np.sqrt(np.mean((actual.values - preds.values) ** 2))
+    rmse = np.sqrt(np.mean((actual.values - preds.values) ** 2))
 
     return {
-        "mape":       round(float(mape), 4),
-        "rmse":       round(float(rmse), 4),
-        "holdout_n":  holdout_n,
+        "mape": round(float(mape), 4),
+        "rmse": round(float(rmse), 4),
+        "holdout_n": holdout_n,
     }
 
 
 # ---------------------------------------------------------------------------
 # MLflow tracking
 # ---------------------------------------------------------------------------
+
 
 def setup_mlflow() -> str:
     """Initialize MLflow experiment. Returns run-level experiment ID."""
@@ -364,6 +378,7 @@ def setup_mlflow() -> str:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def run_forecasting(
     conn: duckdb.DuckDBPyConnection,
@@ -416,14 +431,16 @@ def run_forecasting(
 
                 run_id = mlflow.active_run().info.run_id
 
-                results.append({
-                    "project_id":  proj,
-                    "service_sku": sku,
-                    "forecast_df": forecast_df,
-                    "params":      params,
-                    "metrics":     metrics,
-                    "run_id":      run_id,
-                })
+                results.append(
+                    {
+                        "project_id": proj,
+                        "service_sku": sku,
+                        "forecast_df": forecast_df,
+                        "params": params,
+                        "metrics": metrics,
+                        "run_id": run_id,
+                    }
+                )
 
                 logger.info(
                     f"  ARIMA{params['arima_p'],params['arima_d'],params['arima_q']} | "
@@ -435,15 +452,14 @@ def run_forecasting(
             logger.warning(f"  Failed {proj} | {sku}: {e}")
             continue
 
-    logger.info(
-        f"Forecasting complete. {len(results)}/{n} series fitted successfully."
-    )
+    logger.info(f"Forecasting complete. {len(results)}/{n} series fitted successfully.")
     return results
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FinOps ARIMA Forecasting Engine")
@@ -492,6 +508,7 @@ def main() -> None:
 
             # Write forecasts to DuckDB
             from forecast_writer import write_forecasts
+
             write_forecasts(conn, results)
 
     finally:

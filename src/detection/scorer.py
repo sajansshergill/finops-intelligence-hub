@@ -40,9 +40,9 @@ DB_PATH = Path("data/finops.duckdb")
 # Cost thresholds per severity tier
 THRESHOLDS = {
     "CRITICAL": {"min_confidence": 0.85, "min_cost": 5_000},
-    "HIGH":     {"min_confidence": 0.70, "min_cost": 1_000},
-    "MEDIUM":   {"min_confidence": 0.50, "min_cost": 0},
-    "LOW":      {"min_confidence": 0.00, "min_cost": 0},
+    "HIGH": {"min_confidence": 0.70, "min_cost": 1_000},
+    "MEDIUM": {"min_confidence": 0.50, "min_cost": 0},
+    "LOW": {"min_confidence": 0.00, "min_cost": 0},
 }
 
 
@@ -97,7 +97,8 @@ def score_and_rank(
     Pull flagged anomalies from DuckDB, assign severity tiers,
     rank by confidence × cost, and return scored DataFrame.
     """
-    df = conn.execute("""
+    df = conn.execute(
+        """
         SELECT
             project_id,
             service_sku,
@@ -116,7 +117,8 @@ def score_and_rank(
         FROM anomaly_scored_features
         WHERE is_flagged = true
         ORDER BY anomaly_confidence DESC, cost_usd DESC
-    """).fetchdf()
+    """
+    ).fetchdf()
 
     if df.empty:
         logger.warning("No flagged anomalies found. Run anomaly_engine.py first.")
@@ -128,15 +130,16 @@ def score_and_rank(
     # Composite risk score: confidence weighted by normalized cost
     cost_max = df["cost_usd"].max()
     df["risk_score"] = (
-        0.6 * df["anomaly_confidence"] +
-        0.4 * (df["cost_usd"] / cost_max if cost_max > 0 else 0)
+        0.6 * df["anomaly_confidence"]
+        + 0.4 * (df["cost_usd"] / cost_max if cost_max > 0 else 0)
     ).round(4)
 
     # Cost delta vs 30d average
     df["cost_delta_vs_avg"] = (df["cost_usd"] - df["rolling_avg_30d"]).round(2)
     df["cost_delta_pct"] = (
-        (df["cost_usd"] - df["rolling_avg_30d"]) /
-        df["rolling_avg_30d"].replace(0, 1) * 100
+        (df["cost_usd"] - df["rolling_avg_30d"])
+        / df["rolling_avg_30d"].replace(0, 1)
+        * 100
     ).round(1)
 
     # Alert message
@@ -180,10 +183,12 @@ def write_alerts_to_db(
 
     alert_df["alert_id"] = alert_df.apply(generate_alert_id, axis=1)
     alert_df["triggered_at"] = datetime.now(UTC)
-    alert_df["threshold_usd"] = alert_df["severity"].map({
-        "CRITICAL": 5_000,
-        "HIGH": 1_000,
-    })
+    alert_df["threshold_usd"] = alert_df["severity"].map(
+        {
+            "CRITICAL": 5_000,
+            "HIGH": 1_000,
+        }
+    )
     alert_df["resolved"] = False
     alert_df["resolved_at"] = None
 
@@ -198,13 +203,26 @@ def write_alerts_to_db(
     alert_df["resolved"] = alert_df["resolved"].astype(bool)
 
     before = conn.execute("SELECT COUNT(*) FROM alert_history").fetchone()[0]
-    conn.register("alerts_temp", alert_df[[
-        "alert_id", "triggered_at", "project_id", "service_sku",
-        "severity", "cost_usd", "threshold_usd", "alert_message",
-        "resolved", "resolved_at",
-    ]])
+    conn.register(
+        "alerts_temp",
+        alert_df[
+            [
+                "alert_id",
+                "triggered_at",
+                "project_id",
+                "service_sku",
+                "severity",
+                "cost_usd",
+                "threshold_usd",
+                "alert_message",
+                "resolved",
+                "resolved_at",
+            ]
+        ],
+    )
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT OR IGNORE INTO alert_history (
             alert_id, triggered_at, project_id, service_sku,
             alert_type, severity, cost_usd, threshold_usd,
@@ -223,7 +241,8 @@ def write_alerts_to_db(
             resolved,
             resolved_at
         FROM alerts_temp
-    """)
+    """
+    )
 
     after = conn.execute("SELECT COUNT(*) FROM alert_history").fetchone()[0]
     inserted = after - before
@@ -238,9 +257,14 @@ def print_summary(df: pd.DataFrame) -> None:
         return
 
     cols = [
-        "project_id", "service_sku", "event_date",
-        "cost_usd", "cost_delta_pct", "anomaly_confidence",
-        "severity", "risk_score",
+        "project_id",
+        "service_sku",
+        "event_date",
+        "cost_usd",
+        "cost_delta_pct",
+        "anomaly_confidence",
+        "severity",
+        "risk_score",
     ]
 
     print("\n── Top Anomalies ──────────────────────────────────────────────────────")

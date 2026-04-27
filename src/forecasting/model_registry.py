@@ -1,4 +1,3 @@
-
 """
 model_registry.py
 -----------------
@@ -30,8 +29,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("finops.model_registry")
 
-MLFLOW_URI  = "models/mlruns"
-EXPERIMENT  = "finops-spend-forecast"
+MLFLOW_URI = "models/mlruns"
+EXPERIMENT = "finops-spend-forecast"
 
 
 def setup() -> mlflow.MlflowClient:
@@ -53,21 +52,23 @@ def list_runs(client: mlflow.MlflowClient) -> pd.DataFrame:
 
     rows = []
     for run in runs:
-        rows.append({
-            "run_id":      run.info.run_id[:8],
-            "run_name":    run.info.run_name,
-            "status":      run.info.status,
-            "mape":        run.data.metrics.get("mape"),
-            "rmse":        run.data.metrics.get("rmse"),
-            "aic":         run.data.params.get("aic"),
-            "p":           run.data.params.get("arima_p"),
-            "d":           run.data.params.get("arima_d"),
-            "q":           run.data.params.get("arima_q"),
-            "project_id":  run.data.params.get("project_id"),
-            "service_sku": run.data.params.get("service_sku"),
-            "n_obs":       run.data.params.get("n_obs"),
-            "30d_forecast":run.data.metrics.get("total_forecast_spend"),
-        })
+        rows.append(
+            {
+                "run_id": run.info.run_id[:8],
+                "run_name": run.info.run_name,
+                "status": run.info.status,
+                "mape": run.data.metrics.get("mape"),
+                "rmse": run.data.metrics.get("rmse"),
+                "aic": run.data.params.get("aic"),
+                "p": run.data.params.get("arima_p"),
+                "d": run.data.params.get("arima_d"),
+                "q": run.data.params.get("arima_q"),
+                "project_id": run.data.params.get("project_id"),
+                "service_sku": run.data.params.get("service_sku"),
+                "n_obs": run.data.params.get("n_obs"),
+                "30d_forecast": run.data.metrics.get("total_forecast_spend"),
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -125,7 +126,11 @@ def main() -> None:
     if args.best:
         best = best_runs(df)
         print("\n── Best Model Per Series (lowest MAPE) ────────────────────────────")
-        print(best[["project_id", "service_sku", "mape", "rmse", "p", "d", "q"]].to_string(index=False))
+        print(
+            best[
+                ["project_id", "service_sku", "mape", "rmse", "p", "d", "q"]
+            ].to_string(index=False)
+        )
         print("───────────────────────────────────────────────────────────────────\n")
     else:
         print_summary(df)

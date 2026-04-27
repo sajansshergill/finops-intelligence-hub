@@ -47,16 +47,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = REPO_ROOT / "data" / "finops.duckdb"
 
 # Tunable thresholds
-Z_SCORE_THRESHOLD = 2.0          # Flag if |z_score| exceeds this
-IF_CONTAMINATION = 0.05          # Expected anomaly rate
-CONFIDENCE_THRESHOLD = 0.58      # Tuned via threshold sweep: F1=0.398, Recall=0.509
-                                  # Business rationale: recall prioritized over precision
-                                  # a missed $50K spike > a false alarm in FinOps
+Z_SCORE_THRESHOLD = 2.0  # Flag if |z_score| exceeds this
+IF_CONTAMINATION = 0.05  # Expected anomaly rate
+CONFIDENCE_THRESHOLD = 0.58  # Tuned via threshold sweep: F1=0.398, Recall=0.509
+# Business rationale: recall prioritized over precision
+# a missed $50K spike > a false alarm in FinOps
 
 
 # ---------------------------------------------------------------------------
 # Z-Score detection
 # ---------------------------------------------------------------------------
+
 
 def compute_z_scores(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -69,8 +70,7 @@ def compute_z_scores(df: pd.DataFrame) -> pd.DataFrame:
     # Combined Z-score: weight 7d more heavily (more sensitive to spikes)
     df = df.copy()
     df["z_score_combined"] = (
-        0.6 * df["z_score_7d"].abs() +
-        0.4 * df["z_score_30d"].abs()
+        0.6 * df["z_score_7d"].abs() + 0.4 * df["z_score_30d"].abs()
     )
     return df
 
@@ -78,6 +78,7 @@ def compute_z_scores(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Isolation Forest detection
 # ---------------------------------------------------------------------------
+
 
 def run_isolation_forest(
     df: pd.DataFrame,
@@ -91,7 +92,9 @@ def run_isolation_forest(
     Returns array of anomaly scores in [0, 1] where 1 = most anomalous.
     """
     scores = np.zeros(len(df))
-    scaler = RobustScaler()  # RobustScaler handles cost outliers better than StandardScaler
+    scaler = (
+        RobustScaler()
+    )  # RobustScaler handles cost outliers better than StandardScaler
 
     groups = df.groupby(["project_id", "service_sku"])
     n_groups = len(groups)
@@ -133,6 +136,7 @@ def run_isolation_forest(
 # Score combination
 # ---------------------------------------------------------------------------
 
+
 def combine_scores(
     df: pd.DataFrame,
     if_scores: np.ndarray,
@@ -152,14 +156,13 @@ def combine_scores(
 
     # Normalize Z-score using sigmoid — avoids global max compression
     # sigmoid(z) maps z=2 → 0.88, z=3 → 0.95, z=1 → 0.73
-    df["z_score_normalized"] = (
-        1 / (1 + np.exp(-0.8 * df["z_score_combined"]))
-    ).clip(0, 1)
+    df["z_score_normalized"] = (1 / (1 + np.exp(-0.8 * df["z_score_combined"]))).clip(
+        0, 1
+    )
 
     # Weighted combination — Z-score weighted higher for spike/drop detection
     df["anomaly_confidence"] = (
-        0.6 * df["z_score_normalized"] +
-        0.4 * df["isolation_score"]
+        0.6 * df["z_score_normalized"] + 0.4 * df["isolation_score"]
     ).clip(0, 1)
 
     df["is_flagged"] = df["anomaly_confidence"] >= CONFIDENCE_THRESHOLD
@@ -170,6 +173,7 @@ def combine_scores(
 # ---------------------------------------------------------------------------
 # Write results to DuckDB
 # ---------------------------------------------------------------------------
+
 
 def write_scores(
     conn: duckdb.DuckDBPyConnection,
@@ -182,12 +186,20 @@ def write_scores(
     Returns number of rows written.
     """
     scores_df = df.copy()
-    score_rows = scores_df[[
-        "project_id", "service_sku", "event_date",
-        "z_score_7d", "z_score_30d", "z_score_combined",
-        "isolation_score", "anomaly_confidence", "is_flagged",
-        "has_injected_anomaly",
-    ]].copy()
+    score_rows = scores_df[
+        [
+            "project_id",
+            "service_sku",
+            "event_date",
+            "z_score_7d",
+            "z_score_30d",
+            "z_score_combined",
+            "isolation_score",
+            "anomaly_confidence",
+            "is_flagged",
+            "has_injected_anomaly",
+        ]
+    ].copy()
 
     scores_df["scored_at"] = scored_at
     scores_df["z_score"] = scores_df["z_score_combined"]
@@ -208,7 +220,8 @@ def write_scores(
     conn.register("scores_temp", score_rows)
     conn.register("scored_features_temp", scores_df)
 
-    conn.execute("""
+    conn.execute(
+        """
         INSERT OR IGNORE INTO anomaly_scores (
             event_id,
             scored_at,
@@ -225,14 +238,17 @@ def write_scores(
             s.anomaly_confidence        AS anomaly_confidence,
             s.is_flagged                AS is_flagged
         FROM scores_temp s
-    """)
+    """
+    )
 
     # Also store full scored feature table for dashboard use
     conn.execute("DROP TABLE IF EXISTS anomaly_scored_features")
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE anomaly_scored_features AS
         SELECT * FROM scored_features_temp
-    """)
+    """
+    )
 
     count = conn.execute("SELECT COUNT(*) FROM anomaly_scores").fetchone()[0]
     flagged = conn.execute(
@@ -247,6 +263,7 @@ def write_scores(
 # Evaluation: precision / recall vs ground truth
 # ---------------------------------------------------------------------------
 
+
 def evaluate(df: pd.DataFrame) -> dict:
     """
     Compare detected anomalies vs injected ground truth labels.
@@ -260,15 +277,18 @@ def evaluate(df: pd.DataFrame) -> dict:
     fn = ((y_true == 1) & (y_pred == 0)).sum()
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall    = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1        = (2 * precision * recall / (precision + recall)
-                 if (precision + recall) > 0 else 0)
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = (
+        2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    )
 
     metrics = {
         "precision": round(precision, 4),
-        "recall":    round(recall, 4),
-        "f1":        round(f1, 4),
-        "tp": int(tp), "fp": int(fp), "fn": int(fn),
+        "recall": round(recall, 4),
+        "f1": round(f1, 4),
+        "tp": int(tp),
+        "fp": int(fp),
+        "fn": int(fn),
         "total_flagged": int(y_pred.sum()),
         "total_ground_truth": int(y_true.sum()),
     }
@@ -285,6 +305,7 @@ def evaluate(df: pd.DataFrame) -> dict:
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
 
 def run_detection(
     conn: duckdb.DuckDBPyConnection,
@@ -329,6 +350,7 @@ def run_detection(
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="FinOps Anomaly Detection Engine")
