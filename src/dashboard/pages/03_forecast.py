@@ -30,6 +30,9 @@ st.divider()
 
 @st.cache_data(ttl=300)
 def load_actuals():
+    if not DB_PATH.exists():
+        return pd.DataFrame()
+
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         return conn.execute(
@@ -50,6 +53,9 @@ def load_actuals():
 
 @st.cache_data(ttl=300)
 def load_forecasts():
+    if not DB_PATH.exists():
+        return pd.DataFrame()
+
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         return conn.execute(
@@ -78,6 +84,13 @@ def load_forecasts():
 
 actuals = load_actuals()
 forecasts = load_forecasts()
+
+if actuals.empty and forecasts.empty:
+    st.info(
+        "No forecast data found. Streamlit Cloud does not include `data/finops.duckdb`; "
+        "run the ingestion and forecast pipeline or add a demo database to populate this page."
+    )
+    st.stop()
 
 actuals["event_date"] = pd.to_datetime(actuals["event_date"])
 if not forecasts.empty:

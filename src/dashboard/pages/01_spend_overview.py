@@ -31,6 +31,9 @@ st.divider()
 
 @st.cache_data(ttl=300)
 def load_daily_spend():
+    if not DB_PATH.exists():
+        return pd.DataFrame()
+
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         return conn.execute(
@@ -62,6 +65,13 @@ def delta_pct(current, prior):
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 
 df_raw = load_daily_spend()
+if df_raw.empty:
+    st.info(
+        "No billing data found. Streamlit Cloud does not include `data/finops.duckdb`; "
+        "run the ingestion pipeline or add a demo database to populate this page."
+    )
+    st.stop()
+
 df_raw["event_date"] = pd.to_datetime(df_raw["event_date"])
 
 with st.sidebar:

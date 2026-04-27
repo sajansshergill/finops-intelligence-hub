@@ -38,6 +38,9 @@ st.divider()
 
 @st.cache_data(ttl=300)
 def load_anomalies():
+    if not DB_PATH.exists():
+        return pd.DataFrame()
+
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         return conn.execute(
@@ -81,6 +84,10 @@ def assign_severity(row):
 
 df = load_anomalies()
 if df.empty:
+    st.info(
+        "No anomaly data found. Streamlit Cloud does not include `data/finops.duckdb`; "
+        "run anomaly_engine.py after loading billing data to populate this page."
+    )
     st.stop()
 
 df["event_date"] = pd.to_datetime(df["event_date"])

@@ -35,6 +35,9 @@ st.divider()
 
 @st.cache_data(ttl=60)
 def load_alerts():
+    if not DB_PATH.exists():
+        return pd.DataFrame()
+
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         return conn.execute(
@@ -64,7 +67,10 @@ def load_alerts():
 df = load_alerts()
 
 if df.empty:
-    st.info("No alerts found. Run scorer.py --write-alerts to populate alert history.")
+    st.info(
+        "No alerts found. Streamlit Cloud does not include `data/finops.duckdb`; "
+        "run scorer.py --write-alerts after loading billing data to populate alert history."
+    )
     st.stop()
 
 df["triggered_at"] = pd.to_datetime(df["triggered_at"])

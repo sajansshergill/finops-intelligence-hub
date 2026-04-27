@@ -161,8 +161,19 @@ col1, col2, col3, col4 = st.columns(4)
 DB_PATH = Path("data/finops.duckdb")
 
 
+def show_missing_database():
+    st.info(
+        "Dashboard deployed successfully, but no DuckDB database is available in this "
+        "Streamlit Cloud runtime. Run the ingestion/anomaly/forecast pipeline locally "
+        "or commit a demo `data/finops.duckdb` file to populate live metrics."
+    )
+
+
 @st.cache_data(ttl=300)
 def get_kpis():
+    if not DB_PATH.exists():
+        return None
+
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         total = conn.execute("SELECT COUNT(*) FROM billing_events").fetchone()[0]
@@ -189,7 +200,12 @@ def get_kpis():
 
 
 try:
-    total, spend, flagged, forecasts = get_kpis()
+    kpis = get_kpis()
+    if kpis is None:
+        show_missing_database()
+        total, spend, flagged, forecasts = 0, 0, 0, 0
+    else:
+        total, spend, flagged, forecasts = kpis
     with col1:
         st.metric("Total events", f"{total:,.0f}")
     with col2:
