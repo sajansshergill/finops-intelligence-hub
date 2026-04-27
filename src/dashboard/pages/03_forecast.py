@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
+from src.dashboard.demo_data import build_forecast_actuals, build_forecasts
 
 DB_PATH = Path("data/finops.duckdb")
 
@@ -31,7 +32,7 @@ st.divider()
 @st.cache_data(ttl=300)
 def load_actuals():
     if not DB_PATH.exists():
-        return pd.DataFrame()
+        return build_forecast_actuals()
 
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
@@ -54,7 +55,7 @@ def load_actuals():
 @st.cache_data(ttl=300)
 def load_forecasts():
     if not DB_PATH.exists():
-        return pd.DataFrame()
+        return build_forecasts()
 
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
@@ -86,10 +87,6 @@ actuals = load_actuals()
 forecasts = load_forecasts()
 
 if actuals.empty and forecasts.empty:
-    st.info(
-        "No forecast data found. Streamlit Cloud does not include `data/finops.duckdb`; "
-        "run the ingestion and forecast pipeline or add a demo database to populate this page."
-    )
     st.stop()
 
 actuals["event_date"] = pd.to_datetime(actuals["event_date"])

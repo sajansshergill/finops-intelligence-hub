@@ -11,6 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
+from src.dashboard.demo_data import build_daily_spend
 
 DB_PATH = Path("data/finops.duckdb")
 
@@ -32,7 +33,7 @@ st.divider()
 @st.cache_data(ttl=300)
 def load_daily_spend():
     if not DB_PATH.exists():
-        return pd.DataFrame()
+        return build_daily_spend()
 
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
@@ -65,12 +66,6 @@ def delta_pct(current, prior):
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 
 df_raw = load_daily_spend()
-if df_raw.empty:
-    st.info(
-        "No billing data found. Streamlit Cloud does not include `data/finops.duckdb`; "
-        "run the ingestion pipeline or add a demo database to populate this page."
-    )
-    st.stop()
 
 df_raw["event_date"] = pd.to_datetime(df_raw["event_date"])
 

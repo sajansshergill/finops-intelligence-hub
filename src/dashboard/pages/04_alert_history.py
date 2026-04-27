@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from pathlib import Path
+from src.dashboard.demo_data import build_alerts
 
 DB_PATH = Path("data/finops.duckdb")
 
@@ -36,7 +37,7 @@ st.divider()
 @st.cache_data(ttl=60)
 def load_alerts():
     if not DB_PATH.exists():
-        return pd.DataFrame()
+        return build_alerts()
 
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
@@ -67,10 +68,6 @@ def load_alerts():
 df = load_alerts()
 
 if df.empty:
-    st.info(
-        "No alerts found. Streamlit Cloud does not include `data/finops.duckdb`; "
-        "run scorer.py --write-alerts after loading billing data to populate alert history."
-    )
     st.stop()
 
 df["triggered_at"] = pd.to_datetime(df["triggered_at"])

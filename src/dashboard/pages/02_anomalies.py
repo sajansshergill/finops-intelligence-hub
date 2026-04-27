@@ -11,6 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
+from src.dashboard.demo_data import build_anomalies
 
 DB_PATH = Path("data/finops.duckdb")
 
@@ -39,7 +40,7 @@ st.divider()
 @st.cache_data(ttl=300)
 def load_anomalies():
     if not DB_PATH.exists():
-        return pd.DataFrame()
+        return build_anomalies()
 
     conn = duckdb.connect(str(DB_PATH), read_only=True)
     try:
@@ -84,10 +85,6 @@ def assign_severity(row):
 
 df = load_anomalies()
 if df.empty:
-    st.info(
-        "No anomaly data found. Streamlit Cloud does not include `data/finops.duckdb`; "
-        "run anomaly_engine.py after loading billing data to populate this page."
-    )
     st.stop()
 
 df["event_date"] = pd.to_datetime(df["event_date"])
